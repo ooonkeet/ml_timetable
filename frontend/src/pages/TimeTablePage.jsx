@@ -138,7 +138,7 @@ const RoomTagInput = ({ label, rooms, onChange, color = 'indigo' }) => {
 };
 
 // ─── Faculty Assignment Card ───────────────────────────────────────────────────
-const FacultyCard = ({ faculty, index, subjects, sectionNames, onChange, onRemove }) => {
+const FacultyCard = ({ faculty, index, subjects, sectionNames,facultyList, onChange, onRemove }) => {
   const updateField = (field, val) => onChange(index, { ...faculty, [field]: val });
 
   const toggleAssignment = (subjectName, sectionName, type) => {
@@ -197,6 +197,24 @@ const FacultyCard = ({ faculty, index, subjects, sectionNames, onChange, onRemov
   };
 
   const uniqueSubjects = [...new Set(faculty.assignments.map(a => a.subjectName))];
+  const isTakenByAnotherFaculty = (
+  subjectName,
+  sectionName,
+  type
+  ) => {
+    return facultyList.some((f, fIdx) => {
+      if (fIdx === index) return false; // ignore current faculty
+
+        return f.assignments.some(a =>
+        a.subjectName === subjectName &&
+        a.sections.includes(sectionName) &&
+        (
+          (type === 'theory' && a.teachesTheory) ||
+          (type === 'lab' && a.teachesLab)
+        )
+      );
+    });
+  };
 
   return (
     <div className="border-2 border-slate-200 rounded-xl p-5 bg-white hover:border-indigo-200 transition group">
@@ -256,11 +274,16 @@ const FacultyCard = ({ faculty, index, subjects, sectionNames, onChange, onRemov
                 {sectionNames.map(sec => (
                   <React.Fragment key={sec}>
                     <td className="p-1 text-center">
-                      {subj.credit > 0 ? (
+                      {subj.type === 'theory' ? (
                         <button
+                          disabled={
+                            isTakenByAnotherFaculty(subj.name, sec, 'theory')
+                          }
                           onClick={() => toggleAssignment(subj.name, sec, 'theory')}
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center mx-auto transition ${isAssigned(subj.name, sec, 'theory')
                             ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : isTakenByAnotherFaculty(subj.name, sec, 'theory')
+                            ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50'
                             : 'border-slate-300 hover:border-indigo-400'
                             }`}
                         >
@@ -269,11 +292,13 @@ const FacultyCard = ({ faculty, index, subjects, sectionNames, onChange, onRemov
                       ) : <span className="text-slate-200">—</span>}
                     </td>
                     <td className="p-1 text-center">
-                      {subj.lab > 0 ? (
+                      {subj.type === 'lab' ? (
                         <button
                           onClick={() => toggleAssignment(subj.name, sec, 'lab')}
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center mx-auto transition ${isAssigned(subj.name, sec, 'lab')
                             ? 'bg-purple-600 border-purple-600 text-white'
+                            : isTakenByAnotherFaculty(subj.name, sec, 'lab')
+                            ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50'
                             : 'border-slate-300 hover:border-purple-400'
                             }`}
                         >
@@ -396,8 +421,9 @@ const TimeTablePage = () => {
       const mappedSubjects = subjectsData.map(s => ({
         name: s.name,
         code: s.code != null ? String(s.code) : s.name.substring(0, 5).toUpperCase(),
-        credit: s.credits || 0,
-        lab: s.type === 'lab' ? s.totalClassesPerWeek || 1 : 0,
+        type:s.type,
+        credit: s.type==="theory"?(s.credits||0):0,
+        lab: s.type === 'lab' ? s.credits || 1 : 0,
       }));
       setSubjects(mappedSubjects);
       setStep(2);
@@ -431,13 +457,13 @@ const TimeTablePage = () => {
     // Check coverage for every subject × section
     for (const subj of subjects) {
       for (const sec of sectionNames) {
-        if (subj.credit > 0) {
+        if (subj.type === 'theory') {
           const covered = facultyList.some(f =>
             f.assignments.some(a => a.subjectName === subj.name && a.sections.includes(sec) && a.teachesTheory)
           );
           if (!covered) { setError(`No faculty assigned for theory of "${subj.name}" in Section ${sec}`); return; }
         }
-        if (subj.lab > 0) {
+        if (subj.type === 'lab') {
           const covered = facultyList.some(f =>
             f.assignments.some(a => a.subjectName === subj.name && a.sections.includes(sec) && a.teachesLab)
           );
@@ -455,14 +481,14 @@ const TimeTablePage = () => {
     const labRoomAssignments = [];
     subjects.forEach((subj, idx) => {
       sectionNames.forEach(sec => {
-        if (subj.credit > 0) {
+        if (subj.type === 'theory') {
           theoryRoomAssignments.push({
             subjectName: subj.name,
             sectionName: sec,
             roomName: theoryRooms[idx % theoryRooms.length],
           });
         }
-        if (subj.lab > 0) {
+        if (subj.type === 'lab') {
           labRoomAssignments.push({
             subjectName: subj.name,
             sectionName: sec,
@@ -788,6 +814,7 @@ const TimeTablePage = () => {
                     index={idx}
                     subjects={subjects}
                     sectionNames={sectionNames}
+                    facultyList={facultyList}
                     onChange={updateFaculty}
                     onRemove={removeFaculty}
                   />
