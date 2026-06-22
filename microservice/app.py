@@ -33,6 +33,7 @@ class FacultyIn(BaseModel):
 
 class Payload(BaseModel):
     sectionsCount: int
+    sections: Optional[List[str]] = None
     theoryRooms: List[str]     # list of theory room identifiers
     labRooms: List[str]        # list of lab room identifiers
     theoryRoomAssignments: List[RoomAssignment]
@@ -72,9 +73,12 @@ def section_names(n):
 # ---------- Scheduler endpoint ----------
 @app.post("/schedule")
 def schedule(payload: Payload):
+    sections = payload.sections if payload.sections else section_names(payload.sectionsCount)
+    sections_count = len(sections)
+    
     # Basic validations
-    if not (1 <= payload.sectionsCount <= 6):
-        raise HTTPException(status_code=400, detail="sectionsCount must be between 1 and 6.")
+    if not (1 <= sections_count <= 6):
+        raise HTTPException(status_code=400, detail="Number of sections must be between 1 and 6.")
     if not (8 <= payload.periodsPerDay <= 12):
         raise HTTPException(status_code=400, detail="periodsPerDay must be between 8 and 12.")
     # Removed subject count limit - now allows any number >= 1
@@ -82,7 +86,7 @@ def schedule(payload: Payload):
         raise HTTPException(status_code=400, detail="At least one subject is required.")
     
     # New validation: ensure every subject in every section has a faculty member assigned.
-    sections_list = section_names(payload.sectionsCount)
+    sections_list = sections
     for s in payload.subjects:
         for sec in sections_list:
             # Check theory coverage if needed
@@ -121,8 +125,7 @@ def schedule(payload: Payload):
         raise HTTPException(status_code=400, detail="need at least one lab room")
 
     # indexing helpers
-    S = payload.sectionsCount
-    sections = section_names(S)
+    S = sections_count
     section_index = {name: i for i, name in enumerate(sections)}
     subj_list = [s.name for s in payload.subjects]
     subj_index = {name: i for i, name in enumerate(subj_list)}

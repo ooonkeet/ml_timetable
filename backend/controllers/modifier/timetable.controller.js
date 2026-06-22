@@ -27,6 +27,7 @@ const timetableController = async (req, res) => {
       userId,
       // Python scheduler fields
       sectionsCount,
+      sections,
       theoryRooms,
       labRooms,
       theoryRoomAssignments,
@@ -84,6 +85,7 @@ const timetableController = async (req, res) => {
     // Send EXACTLY what the Python scheduler expects
     const schedulerPayload = {
       sectionsCount,
+      sections,
       theoryRooms,
       labRooms,
       theoryRoomAssignments,

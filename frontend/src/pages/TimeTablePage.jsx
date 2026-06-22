@@ -324,8 +324,8 @@ const TimeTablePage = () => {
   // Selection
   const [universities, setUniversities] = useState([]);
   const [programs, setPrograms] = useState([]);
-  const [sections, setSections] = useState([]);
   const [streams, setStreams] = useState([]);
+  const [dbSections, setDbSections] = useState([]);
   const [selectedUniversity, setSelectedUniversity] = useState(null);
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
@@ -357,7 +357,9 @@ const TimeTablePage = () => {
   const [success, setSuccess] = useState('');
 
   const BASE = import.meta.env.VITE_BASE_URL;
-  const sectionNames = Array.from({ length: sectionsCount }, (_, i) => String.fromCharCode(65 + i));
+  const sectionNames = dbSections.length > 0
+    ? dbSections.map(s => s.name)
+    : Array.from({ length: sectionsCount }, (_, i) => String.fromCharCode(65 + i));
 
   // Load universities
   useEffect(() => {
@@ -376,46 +378,61 @@ const TimeTablePage = () => {
       .finally(() => setLoading(false));
   }, [selectedUniversity]);
 
-  // Load sections
+  // Load streams based on program directly
   useEffect(() => {
-    if (!selectedProgram) { setSections([]); setSelectedSection(null); return; }
+    if (!selectedProgram) { setStreams([]); setSelectedStream(null); return; }
     setLoading(true);
-    axios.get(`${BASE}/api/v1/sections/getAllSections?programId=${selectedProgram._id}`)
-      .then(r => setSections(r.data || []))
-      .catch(() => setSections([]))
+    axios.get(`${BASE}/api/v1/streams/getstreams`)
+      .then(r => {
+        const filtered = (r.data || []).filter(s => {
+          const progId = s.program?._id || s.program;
+          return progId === selectedProgram._id;
+        });
+        setStreams(filtered);
+      })
+      .catch(() => setStreams([]))
       .finally(() => setLoading(false));
   }, [selectedProgram]);
 
-  // Load streams
+  // Load sections based on stream directly
   useEffect(() => {
-    if (!selectedSection) { setStreams([]); setSelectedStream(null); return; }
+    if (!selectedStream) { setDbSections([]); return; }
     setLoading(true);
-    axios.get(`${BASE}/api/v1/streams/getstreams?sectionId=${selectedSection._id}`)
-      .then(r => setStreams(r.data || []))
-      .catch(() => setStreams([]))
+    axios.get(`${BASE}/api/v1/sections/getSection`)
+      .then(r => {
+        const filtered = (r.data || []).filter(s => {
+          const strId = s.stream?._id || s.stream;
+          return strId === selectedStream._id;
+        });
+        setDbSections(filtered);
+        setSectionsCount(filtered.length);
+        if (filtered.length > 0) {
+          setSelectedSection(filtered[0]);
+        } else {
+          setSelectedSection(null);
+        }
+      })
+      .catch(() => setDbSections([]))
       .finally(() => setLoading(false));
-  }, [selectedSection]);
+  }, [selectedStream]);
 
   // ── Step 1 → 2: Load section subjects ──────────────────────────────────────
   const handleProceed = async () => {
-    if (!selectedUniversity || !selectedProgram || !selectedSection) {
-      setError('Please select University, Program, and Section');
+    if (!selectedUniversity || !selectedProgram || !selectedStream) {
+      setError('Please select University, Program, and Stream');
+      return;
+    }
+    if (dbSections.length === 0) {
+      setError('Selected stream has no sections defined. Please add sections for this stream first.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const r = await axios.get(`${BASE}/api/v1/sections/getSectionById/${selectedSection._id}`);
-      const sectionData = r.data;
-      const streamId = sectionData.stream?._id || sectionData.stream;
-      if (!streamId) {
-        setError('Selected section has no stream assigned. Please check section configuration.');
-        return;
-      }
-      const subjectsRes = await axios.get(`${BASE}/api/v1/subjects/getSubjects?streamId=${streamId}`);
+      const subjectsRes = await axios.get(`${BASE}/api/v1/subjects/getSubjects?streamId=${selectedStream._id}`);
       const subjectsData = subjectsRes.data;
       if (!Array.isArray(subjectsData) || subjectsData.length === 0) {
-        setError('No subjects found for this section stream. Add subjects for the selected stream first.');
+        setError('No subjects found for this stream. Add subjects for the selected stream first.');
         return;
       }
       const mappedSubjects = subjectsData.map(s => ({
@@ -428,7 +445,7 @@ const TimeTablePage = () => {
       setSubjects(mappedSubjects);
       setStep(2);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to load section details');
+      setError(err.response?.data?.message || err.message || 'Failed to load subjects');
     } finally {
       setLoading(false);
     }
@@ -500,6 +517,7 @@ const TimeTablePage = () => {
 
     return {
       sectionsCount,
+      sections: sectionNames,
       theoryRooms,
       labRooms,
       theoryRoomAssignments,
@@ -613,7 +631,7 @@ const TimeTablePage = () => {
         {step === 1 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">Select Institution</h2>
-            <p className="text-slate-500 text-sm mb-8">Choose the university, program, and section for which you want to generate a timetable.</p>
+            <p className="text-slate-500 text-sm mb-8">Choose the university, program, and stream for which you want to generate a timetable.</p>
 
             <div className="grid md:grid-cols-2 gap-6">
               <SelectField
@@ -632,31 +650,23 @@ const TimeTablePage = () => {
                 placeholder="-- Select Program --"
               />
               <SelectField
-                label="Section"
-                value={selectedSection?._id || ''}
-                onChange={e => setSelectedSection(sections.find(s => s._id === e.target.value) || null)}
-                options={sections}
-                disabled={!selectedProgram}
-                placeholder="-- Select Section --"
-              />
-              <SelectField
-                label="Stream (Optional)"
+                label="Stream"
                 value={selectedStream?._id || ''}
                 onChange={e => setSelectedStream(streams.find(s => s._id === e.target.value) || null)}
                 options={streams}
-                disabled={!selectedSection}
-                placeholder="-- No Stream --"
+                disabled={!selectedProgram}
+                placeholder="-- Select Stream --"
               />
             </div>
 
             {/* Selection Summary */}
-            {selectedSection && (
+            {selectedStream && (
               <div className="mt-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex flex-wrap gap-4">
                 {[
                   { label: 'University', value: selectedUniversity?.name },
                   { label: 'Program', value: selectedProgram?.name },
-                  { label: 'Section', value: selectedSection?.name },
-                  selectedStream && { label: 'Stream', value: selectedStream?.name },
+                  { label: 'Stream', value: selectedStream?.name },
+                  dbSections.length > 0 && { label: 'Sections', value: dbSections.map(s => s.name).join(', ') },
                 ].filter(Boolean).map(item => (
                   <div key={item.label}>
                     <p className="text-xs text-indigo-400 font-semibold uppercase tracking-wider">{item.label}</p>
@@ -668,7 +678,7 @@ const TimeTablePage = () => {
 
             <button
               onClick={handleProceed}
-              disabled={!selectedUniversity || !selectedProgram || !selectedSection || loading}
+              disabled={!selectedUniversity || !selectedProgram || !selectedStream || loading}
               className="mt-8 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2"
             >
               {loading ? <><Icon.Spinner /> Loading...</> : <>Continue to Configure <Icon.Chevron /></>}
@@ -685,7 +695,7 @@ const TimeTablePage = () => {
               <span>·</span>
               <span>{selectedProgram?.name}</span>
               <span>·</span>
-              <span>Section: <strong>{selectedSection?.name}</strong></span>
+              <span>Stream: <strong>{selectedStream?.name}</strong></span>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
@@ -695,7 +705,7 @@ const TimeTablePage = () => {
               {/* Schedule Parameters */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
-                  { label: 'Sections Count', value: sectionsCount, set: setSectionsCount, min: 1, max: 6, hint: '1–6' },
+                  { label: 'Sections Count', value: sectionsCount, set: setSectionsCount, min: 1, max: 6, hint: 'From DB', readOnly: true },
                   { label: 'Periods / Day', value: periodsPerDay, set: setPeriodsPerDay, min: 8, max: 12, hint: '8–12' },
                   { label: 'Break After Period', value: breakPeriod, set: setBreakPeriod, min: 1, max: periodsPerDay - 1, hint: '1-indexed' },
                   { label: 'Working Days', value: workingDays, set: setWorkingDays, min: 1, max: 6, hint: '1–6' },
@@ -706,8 +716,9 @@ const TimeTablePage = () => {
                       type="number"
                       min={f.min} max={f.max}
                       value={f.value}
-                      onChange={e => f.set(Number(e.target.value))}
-                      className="w-full bg-white border-2 border-slate-200 rounded-lg px-3 py-2 text-lg font-bold text-slate-800 text-center focus:border-indigo-400 outline-none"
+                      onChange={e => !f.readOnly && f.set(Number(e.target.value))}
+                      readOnly={f.readOnly}
+                      className={`w-full bg-white border-2 border-slate-200 rounded-lg px-3 py-2 text-lg font-bold text-slate-800 text-center focus:border-indigo-400 outline-none ${f.readOnly ? 'bg-slate-100 cursor-not-allowed text-slate-400' : ''}`}
                     />
                     <p className="text-xs text-slate-400 text-center mt-1">{f.hint}</p>
                   </div>
@@ -719,7 +730,7 @@ const TimeTablePage = () => {
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Sections that will be generated</p>
                 <div className="flex gap-2 flex-wrap">
                   {sectionNames.map(s => (
-                    <span key={s} className="px-3 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-full text-sm">Section {s}</span>
+                    <span key={s} className="px-3 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-full text-sm">{s}</span>
                   ))}
                 </div>
               </div>
@@ -774,7 +785,7 @@ const TimeTablePage = () => {
               <span>·</span>
               <span>{selectedProgram?.name}</span>
               <span>·</span>
-              <span>Section: <strong>{selectedSection?.name}</strong></span>
+              <span>Stream: <strong>{selectedStream?.name}</strong></span>
               <span>·</span>
               <span>{sectionsCount} sections · {periodsPerDay} periods · {workingDays} days</span>
             </div>
@@ -879,7 +890,7 @@ const TimeTablePage = () => {
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
-                  { label: 'Section', value: selectedSection?.name },
+                  { label: 'Stream', value: selectedStream?.name },
                   { label: 'Sections', value: `${sectionsCount} (${sectionNames.join(', ')})` },
                   { label: 'Subjects', value: subjects.length },
                   { label: 'Faculty', value: facultyList.length },
