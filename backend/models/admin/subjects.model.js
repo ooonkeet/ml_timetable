@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const subjectSchema = new mongoose.Schema({
     stream:{type:mongoose.Schema.Types.ObjectId,ref:"Stream",required:true},
-    code:{type:Number,required:true},
+    code:{type:String,required:true,maxlength:15},
     name:{type:String,required:true},
     type:{type:String, required:true,
         validate:{

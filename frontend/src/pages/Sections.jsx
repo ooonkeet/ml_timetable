@@ -54,6 +54,31 @@ const Sections = () => {
     }
   };
 
+  const handleDuplicate = async (row) => {
+    const originalSection = sections.find(s => s._id === row._id);
+    if (!originalSection) return;
+
+    try {
+      const duplicateData = {
+        name: `${originalSection.name} Copy`,
+        stream: originalSection.stream?._id || originalSection.stream,
+        year: Number(originalSection.year),
+        semester: Number(originalSection.semester),
+        totalStudents: Number(originalSection.totalStudents) || 0
+      };
+
+      await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/v1/sections/createSection`,
+        duplicateData
+      );
+      toast.success('Section duplicated successfully!');
+      fetchSections();
+    } catch (error) {
+      console.error('Failed to duplicate section:', error);
+      toast.error(error.response?.data?.message || 'Failed to duplicate section');
+    }
+  };
+
   const handleSubmit = async (formData) => {
     try {
       if (editSection) {
@@ -95,6 +120,7 @@ const Sections = () => {
           }))}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
         />
 
         {showModal && (

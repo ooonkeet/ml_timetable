@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 
-export default function Table({ columns, data, onEdit, onDelete }) {
+export default function Table({ columns, data, onEdit, onDelete, onDuplicate }) {
   const tableData = Array.isArray(data) ? data : [];
 
   const columnKeyMap = {
@@ -65,12 +65,23 @@ export default function Table({ columns, data, onEdit, onDelete }) {
                 );
               })}
               <td className="px-3 py-4 flex gap-2">
+                {onDuplicate && (
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 text-white hover:bg-blue-700 transition"
+                    onClick={() => {
+                      onDuplicate(row);
+                    }}
+                  >
+                    Duplicate
+                  </Button>
+                )}
+
                 <Button
                   size="sm"
                   className="bg-green-600 text-white hover:bg-green-700 transition"
                   onClick={() => {
                     onEdit(row);
-                    
                   }}
                 >
                   Edit

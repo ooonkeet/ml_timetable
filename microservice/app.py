@@ -11,7 +11,7 @@ from feasibility.features import extract_features
 # ---------- Input models ----------
 class SubjectIn(BaseModel):
     name: str
-    code: str = Field(..., min_length=1, max_length=5, description="A unique code for the subject (1-5 characters).")
+    code: str = Field(..., min_length=1, max_length=15, description="A unique code for the subject (1-15 characters).")
     credit: int = Field(..., ge=0, le=10, description="Number of theory classes per week (0-10).")
     lab: int = Field(0, ge=0, le=10, description="Number of 2-period lab blocks per week (0-10).")
 
