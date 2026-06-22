@@ -37,6 +37,12 @@ export const getSubjects = async (req, res) => {
     if (req.query.streamId) {
       query.stream = req.query.streamId;
     }
+    if (req.query.year) {
+      query.year = Number(req.query.year);
+    }
+    if (req.query.semester) {
+      query.semester = Number(req.query.semester);
+    }
     const subjects = await Subject.find(query).populate('stream');
     res.status(200).json(subjects);
   } catch (error) {

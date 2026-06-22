@@ -330,6 +330,8 @@ const TimeTablePage = () => {
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
   const [selectedStream, setSelectedStream] = useState(null);
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
 
   // Config
   const [sectionsCount, setSectionsCount] = useState(2);
@@ -394,15 +396,22 @@ const TimeTablePage = () => {
       .finally(() => setLoading(false));
   }, [selectedProgram]);
 
-  // Load sections based on stream directly
+  // Load sections based on stream, year, and semester
   useEffect(() => {
-    if (!selectedStream) { setDbSections([]); return; }
+    if (!selectedStream || !selectedYear || !selectedSemester) {
+      setDbSections([]);
+      setSectionsCount(0);
+      setSelectedSection(null);
+      return;
+    }
     setLoading(true);
     axios.get(`${BASE}/api/v1/sections/getSection`)
       .then(r => {
         const filtered = (r.data || []).filter(s => {
           const strId = s.stream?._id || s.stream;
-          return strId === selectedStream._id;
+          return strId === selectedStream._id &&
+                 s.year === Number(selectedYear) &&
+                 s.semester === Number(selectedSemester);
         });
         setDbSections(filtered);
         setSectionsCount(filtered.length);
@@ -414,33 +423,34 @@ const TimeTablePage = () => {
       })
       .catch(() => setDbSections([]))
       .finally(() => setLoading(false));
-  }, [selectedStream]);
+  }, [selectedStream, selectedYear, selectedSemester]);
 
   // ── Step 1 → 2: Load section subjects ──────────────────────────────────────
   const handleProceed = async () => {
-    if (!selectedUniversity || !selectedProgram || !selectedStream) {
-      setError('Please select University, Program, and Stream');
+    if (!selectedUniversity || !selectedProgram || !selectedStream || !selectedYear || !selectedSemester) {
+      setError('Please select University, Program, Stream, Year, and Semester');
       return;
     }
     if (dbSections.length === 0) {
-      setError('Selected stream has no sections defined. Please add sections for this stream first.');
+      setError('Selected stream, year, and semester has no sections defined. Please add sections first.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const subjectsRes = await axios.get(`${BASE}/api/v1/subjects/getSubjects?streamId=${selectedStream._id}`);
+      const subjectsRes = await axios.get(`${BASE}/api/v1/subjects/getSubjects?streamId=${selectedStream._id}&year=${selectedYear}&semester=${selectedSemester}`);
       const subjectsData = subjectsRes.data;
       if (!Array.isArray(subjectsData) || subjectsData.length === 0) {
-        setError('No subjects found for this stream. Add subjects for the selected stream first.');
+        setError('No subjects found for this stream, year, and semester. Add subjects first.');
         return;
       }
       const mappedSubjects = subjectsData.map(s => ({
         name: s.name,
         code: s.code != null ? String(s.code) : s.name.substring(0, 5).toUpperCase(),
-        type:s.type,
-        credit: s.type==="theory"?(s.credits||0):0,
-        lab: s.type === 'lab' ? s.credits || 1 : 0,
+        type: s.type,
+        totalClassesPerWeek: s.totalClassesPerWeek || 0,
+        credit: s.type === "theory" ? (s.totalClassesPerWeek || 0) : 0,
+        lab: s.type === "lab" ? Math.max(1, Math.floor((s.totalClassesPerWeek || 0) / 2)) : 0,
       }));
       setSubjects(mappedSubjects);
       setStep(2);
@@ -582,6 +592,7 @@ const TimeTablePage = () => {
   const handleReset = () => {
     setStep(1); setSelectedUniversity(null); setSelectedProgram(null);
     setSelectedSection(null); setSelectedStream(null);
+    setSelectedYear(''); setSelectedSemester('');
     setSubjects([]); setFacultyList([]); setGenerationData(null);
     setFeasibility(null);
     setError(''); setSuccess('');
@@ -637,14 +648,25 @@ const TimeTablePage = () => {
               <SelectField
                 label="University"
                 value={selectedUniversity?._id || ''}
-                onChange={e => setSelectedUniversity(universities.find(u => u._id === e.target.value) || null)}
+                onChange={e => {
+                  setSelectedUniversity(universities.find(u => u._id === e.target.value) || null);
+                  setSelectedProgram(null);
+                  setSelectedStream(null);
+                  setSelectedYear('');
+                  setSelectedSemester('');
+                }}
                 options={universities}
                 placeholder="-- Select University --"
               />
               <SelectField
                 label="Program"
                 value={selectedProgram?._id || ''}
-                onChange={e => setSelectedProgram(programs.find(p => p._id === e.target.value) || null)}
+                onChange={e => {
+                  setSelectedProgram(programs.find(p => p._id === e.target.value) || null);
+                  setSelectedStream(null);
+                  setSelectedYear('');
+                  setSelectedSemester('');
+                }}
                 options={programs}
                 disabled={!selectedUniversity}
                 placeholder="-- Select Program --"
@@ -652,11 +674,47 @@ const TimeTablePage = () => {
               <SelectField
                 label="Stream"
                 value={selectedStream?._id || ''}
-                onChange={e => setSelectedStream(streams.find(s => s._id === e.target.value) || null)}
+                onChange={e => {
+                  setSelectedStream(streams.find(s => s._id === e.target.value) || null);
+                  setSelectedYear('');
+                  setSelectedSemester('');
+                }}
                 options={streams}
                 disabled={!selectedProgram}
                 placeholder="-- Select Stream --"
               />
+              
+              {selectedStream && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Year</label>
+                    <select
+                      value={selectedYear}
+                      onChange={e => setSelectedYear(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-indigo-500"
+                    >
+                      <option value="">-- Select Year --</option>
+                      {[1, 2, 3, 4].map(y => (
+                        <option key={y} value={y}>Year {y}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Semester</label>
+                    <select
+                      value={selectedSemester}
+                      onChange={e => setSelectedSemester(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-indigo-500"
+                    >
+                      <option value="">-- Select Semester --</option>
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                        <option key={s} value={s}>Semester {s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Selection Summary */}
@@ -666,6 +724,8 @@ const TimeTablePage = () => {
                   { label: 'University', value: selectedUniversity?.name },
                   { label: 'Program', value: selectedProgram?.name },
                   { label: 'Stream', value: selectedStream?.name },
+                  selectedYear && { label: 'Year', value: `Year ${selectedYear}` },
+                  selectedSemester && { label: 'Semester', value: `Semester ${selectedSemester}` },
                   dbSections.length > 0 && { label: 'Sections', value: dbSections.map(s => s.name).join(', ') },
                 ].filter(Boolean).map(item => (
                   <div key={item.label}>
@@ -678,7 +738,7 @@ const TimeTablePage = () => {
 
             <button
               onClick={handleProceed}
-              disabled={!selectedUniversity || !selectedProgram || !selectedStream || loading}
+              disabled={!selectedUniversity || !selectedProgram || !selectedStream || !selectedYear || !selectedSemester || loading}
               className="mt-8 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2"
             >
               {loading ? <><Icon.Spinner /> Loading...</> : <>Continue to Configure <Icon.Chevron /></>}
@@ -696,6 +756,10 @@ const TimeTablePage = () => {
               <span>{selectedProgram?.name}</span>
               <span>·</span>
               <span>Stream: <strong>{selectedStream?.name}</strong></span>
+              <span>·</span>
+              <span>Year: <strong>{selectedYear}</strong></span>
+              <span>·</span>
+              <span>Semester: <strong>{selectedSemester}</strong></span>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
@@ -757,8 +821,11 @@ const TimeTablePage = () => {
                         <span className="text-xs font-mono bg-white border border-slate-200 px-2 py-0.5 rounded text-slate-500">{s.code}</span>
                       </div>
                       <div className="flex gap-3 text-xs text-slate-500">
-                        <span className="text-indigo-600 font-medium">{s.credit} Theory</span>
-                        {s.lab > 0 && <span className="text-purple-600 font-medium">{s.lab} Lab</span>}
+                        {s.type === 'theory' ? (
+                          <span className="text-indigo-600 font-medium">{s.totalClassesPerWeek} Theory</span>
+                        ) : (
+                          <span className="text-purple-600 font-medium">{s.totalClassesPerWeek} Lab</span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -786,6 +853,10 @@ const TimeTablePage = () => {
               <span>{selectedProgram?.name}</span>
               <span>·</span>
               <span>Stream: <strong>{selectedStream?.name}</strong></span>
+              <span>·</span>
+              <span>Year: <strong>{selectedYear}</strong></span>
+              <span>·</span>
+              <span>Semester: <strong>{selectedSemester}</strong></span>
               <span>·</span>
               <span>{sectionsCount} sections · {periodsPerDay} periods · {workingDays} days</span>
             </div>
@@ -891,6 +962,8 @@ const TimeTablePage = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
                   { label: 'Stream', value: selectedStream?.name },
+                  { label: 'Year', value: `Year ${selectedYear}` },
+                  { label: 'Semester', value: `Semester ${selectedSemester}` },
                   { label: 'Sections', value: `${sectionsCount} (${sectionNames.join(', ')})` },
                   { label: 'Subjects', value: subjects.length },
                   { label: 'Faculty', value: facultyList.length },

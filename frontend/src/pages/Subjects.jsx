@@ -10,16 +10,31 @@ const Subjects = () => {
   const [editSubject, setEditSubject] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [parsedSubjects, setParsedSubjects] = useState([]);
+  const [selectedStream, setSelectedStream] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
   const [selectedUploadStream, setSelectedUploadStream] = useState('');
+  const [selectedUploadYear, setSelectedUploadYear] = useState('');
+  const [selectedUploadSemester, setSelectedUploadSemester] = useState('');
   const [parsing, setParsing] = useState(false);
 
-  // fetch all subjects
+  // fetch subjects matching selected stream, year, and semester
   const fetchSubjects = async () => {
+    if (!selectedStream || !selectedYear || !selectedSemester) {
+      setSubjects([]);
+      return;
+    }
     try {
       const res = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/api/v1/subjects/getSubjects`
+        `${import.meta.env.VITE_BASE_URL}/api/v1/subjects/getSubjects`,
+        {
+          params: {
+            streamId: selectedStream,
+            year: selectedYear,
+            semester: selectedSemester
+          }
+        }
       );
-      console.log(res.data);
       setSubjects(res.data);
     } catch (error) {
       console.log(error);
@@ -40,9 +55,12 @@ const Subjects = () => {
   };
 
   useEffect(() => {
-    fetchSubjects();
     fetchStreams();
   }, []);
+
+  useEffect(() => {
+    fetchSubjects();
+  }, [selectedStream, selectedYear, selectedSemester]);
 
   const handleEdit = (subject) => {
     setEditSubject(subject);
@@ -69,6 +87,8 @@ const Subjects = () => {
         !formData.code ||
         !formData.name ||
         !formData.stream ||
+        !formData.year ||
+        !formData.semester ||
         !formData.type ||
         !formData.credits
       ) {
@@ -86,6 +106,8 @@ const Subjects = () => {
         code: String(formData.code).trim(),
         name: formData.name.trim(),
         stream: formData.stream,
+        year: Number(formData.year),
+        semester: Number(formData.semester),
         type: formData.type.toLowerCase(),
         credits: Number(formData.credits),
         totalClassesPerWeek,
@@ -171,6 +193,14 @@ const Subjects = () => {
       toast.error("Please select a stream for the subjects");
       return;
     }
+    if (!selectedUploadYear) {
+      toast.error("Please select a year for the subjects");
+      return;
+    }
+    if (!selectedUploadSemester) {
+      toast.error("Please select a semester for the subjects");
+      return;
+    }
 
     for (const s of parsedSubjects) {
       if (!s.code || !s.code.trim()) {
@@ -195,7 +225,9 @@ const Subjects = () => {
         type: s.type.toLowerCase(),
         credits: Number(s.credits) || 0,
         totalClassesPerWeek: Number(s.totalClassesPerWeek) || 0,
-        stream: selectedUploadStream
+        stream: selectedUploadStream,
+        year: Number(selectedUploadYear),
+        semester: Number(selectedUploadSemester)
       }));
 
       await axios.post(
@@ -207,6 +239,8 @@ const Subjects = () => {
       setShowPreviewModal(false);
       setParsedSubjects([]);
       setSelectedUploadStream('');
+      setSelectedUploadYear('');
+      setSelectedUploadSemester('');
       fetchSubjects();
     } catch (err) {
       console.error(err);
@@ -241,29 +275,94 @@ const Subjects = () => {
             </button>
           </div>
         </div>
-        <Table
-          columns={[
-            'Code',
-            'Name',
-            'Stream',
-            'Type',
-            'Credits',
-            'Classes/Week',
-          ]}
-          data={subjects.map((subject) => ({
-            _id: subject._id,
-            code: subject.code || 'N/A',
-            name: subject.name || 'N/A',
-            stream: subject.stream?.name || 'N/A',
-            type: subject.type
-              ? subject.type.charAt(0).toUpperCase() + subject.type.slice(1)
-              : 'N/A',
-            credits: subject.credits || '0',
-            'classes per week': subject.totalClassesPerWeek || '0',
-          }))}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
+
+        {/* Filter Bar */}
+        <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 mb-6 flex flex-wrap gap-6 items-center">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Year</label>
+            <select
+              value={selectedYear}
+              onChange={e => {
+                setSelectedYear(e.target.value);
+                setSelectedUploadYear(e.target.value);
+              }}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[130px]"
+            >
+              <option value="">-- Select Year --</option>
+              {[1, 2, 3, 4].map(y => (
+                <option key={y} value={y}>Year {y}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Semester</label>
+            <select
+              value={selectedSemester}
+              onChange={e => {
+                setSelectedSemester(e.target.value);
+                setSelectedUploadSemester(e.target.value);
+              }}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[150px]"
+            >
+              <option value="">-- Select Semester --</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                <option key={s} value={s}>Semester {s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stream</label>
+            <select
+              value={selectedStream}
+              onChange={e => {
+                setSelectedStream(e.target.value);
+                setSelectedUploadStream(e.target.value);
+              }}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[220px]"
+            >
+              <option value="">-- Select Stream --</option>
+              {streams.map(str => (
+                <option key={str._id} value={str._id}>{str.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {(!selectedYear || !selectedSemester || !selectedStream) ? (
+          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-12 text-center text-slate-500">
+            <p className="text-base font-semibold">Please select Year, Semester, and Stream from the filters above to view and manage subjects.</p>
+          </div>
+        ) : (
+          <Table
+            columns={[
+              'Code',
+              'Name',
+              'Stream',
+              'Year',
+              'Semester',
+              'Type',
+              'Credits',
+              'Classes/Week',
+            ]}
+            data={subjects.map((subject) => ({
+              _id: subject._id,
+              code: subject.code || 'N/A',
+              name: subject.name || 'N/A',
+              stream: subject.stream?.name || 'N/A',
+              year: subject.year || 'N/A',
+              semester: subject.semester || 'N/A',
+              type: subject.type
+                ? subject.type.charAt(0).toUpperCase() + subject.type.slice(1)
+                : 'N/A',
+              credits: subject.credits || '0',
+              'classes per week': subject.totalClassesPerWeek || '0',
+            }))}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        )}
 
         {showModal && (
           <FormModal
@@ -294,6 +393,24 @@ const Subjects = () => {
                 })),
               },
               {
+                name: 'year',
+                label: 'Year',
+                type: 'number',
+                props: {
+                  min: 1,
+                  max: 4,
+                },
+              },
+              {
+                name: 'semester',
+                label: 'Semester',
+                type: 'number',
+                props: {
+                  min: 1,
+                  max: 8,
+                },
+              },
+              {
                 name: 'type',
                 label: 'Subject Type',
                 type: 'select',
@@ -322,12 +439,20 @@ const Subjects = () => {
                 },
               },
             ]}
-            defaultValues={{
-              ...editSubject,
-              totalClassesPerWeek: editSubject
-                ? editSubject.totalClassesPerWeek
-                : 0,
-            }}
+            defaultValues={
+              editSubject
+                ? {
+                    ...editSubject,
+                    stream: editSubject.stream?._id || editSubject.stream,
+                    totalClassesPerWeek: editSubject.totalClassesPerWeek || 0,
+                  }
+                : {
+                    stream: selectedStream || '',
+                    year: selectedYear ? Number(selectedYear) : '',
+                    semester: selectedSemester ? Number(selectedSemester) : '',
+                    totalClassesPerWeek: 0,
+                  }
+            }
             onSubmit={handleSubmit}
           />
         )}
@@ -351,19 +476,43 @@ const Subjects = () => {
               <div className="p-6 overflow-y-auto flex-1 space-y-6">
                 <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <h4 className="text-sm font-semibold text-indigo-900">Select Stream for these subjects</h4>
-                    <p className="text-xs text-indigo-700 mt-0.5">All extracted subjects will be added under the selected stream.</p>
+                    <h4 className="text-sm font-semibold text-indigo-900">Select Stream, Year & Semester for these subjects</h4>
+                    <p className="text-xs text-indigo-700 mt-0.5">All extracted subjects will be added under the selected stream, year, and semester.</p>
                   </div>
-                  <select
-                    value={selectedUploadStream}
-                    onChange={e => setSelectedUploadStream(e.target.value)}
-                    className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[200px]"
-                  >
-                    <option value="">-- Select Stream --</option>
-                    {streams.map(str => (
-                      <option key={str._id} value={str._id}>{str.name} ({str.program?.name || 'N/A'})</option>
-                    ))}
-                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    <select
+                      value={selectedUploadStream}
+                      onChange={e => setSelectedUploadStream(e.target.value)}
+                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[200px]"
+                    >
+                      <option value="">-- Select Stream --</option>
+                      {streams.map(str => (
+                        <option key={str._id} value={str._id}>{str.name} ({str.program?.name || 'N/A'})</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedUploadYear}
+                      onChange={e => setSelectedUploadYear(e.target.value)}
+                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[100px]"
+                    >
+                      <option value="">-- Year --</option>
+                      {[1, 2, 3, 4].map(y => (
+                        <option key={y} value={y}>Year {y}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedUploadSemester}
+                      onChange={e => setSelectedUploadSemester(e.target.value)}
+                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[120px]"
+                    >
+                      <option value="">-- Semester --</option>
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                        <option key={s} value={s}>Semester {s}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -465,7 +614,7 @@ const Subjects = () => {
                 </button>
                 <button
                   onClick={handleBulkSave}
-                  disabled={!selectedUploadStream || parsedSubjects.length === 0}
+                  disabled={!selectedUploadStream || !selectedUploadYear || !selectedUploadSemester || parsedSubjects.length === 0}
                   className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold text-sm rounded-lg shadow-sm transition disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
                   Save All to DB ({parsedSubjects.length})
