@@ -21,6 +21,7 @@ export default function FormModal({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm({ defaultValues });
 
@@ -31,13 +32,12 @@ export default function FormModal({
 
   const submitHandler = (data) => {
     onSubmit(data);
-    
     handleClose();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent>
+      <DialogContent className="top-10 translate-y-0 max-h-[calc(100vh-5rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -53,21 +53,42 @@ export default function FormModal({
               {field.type === "number" && (
                 <Input
                   type="number"
-                  {...register(field.name, { required: `${field.label} is required` })}
+                  {...register(field.name, {
+                    required: `${field.label} is required`,
+                    onChange: (e) => {
+                      if (field.onChange) {
+                        field.onChange(e.target.value, setValue);
+                      }
+                    }
+                  })}
                 />
               )}
 
               {field.type === "text" && (
                 <Input
                   type="text"
-                  {...register(field.name, { required: `${field.label} is required` })}
+                  {...register(field.name, {
+                    required: `${field.label} is required`,
+                    onChange: (e) => {
+                      if (field.onChange) {
+                        field.onChange(e.target.value, setValue);
+                      }
+                    }
+                  })}
                 />
               )}
 
               {field.type === "select" && (
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  {...register(field.name, { required: `${field.label} is required` })}
+                  {...register(field.name, {
+                    required: `${field.label} is required`,
+                    onChange: (e) => {
+                      if (field.onChange) {
+                        field.onChange(e.target.value, setValue);
+                      }
+                    }
+                  })}
                 >
                   <option value="">Select {field.label}</option>
                   {field.options?.map((opt) => (
@@ -82,7 +103,14 @@ export default function FormModal({
                 <Input
                   type="time"
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
-                  {...register(field.name, { required: `${field.label} is required` })}
+                  {...register(field.name, {
+                    required: `${field.label} is required`,
+                    onChange: (e) => {
+                      if (field.onChange) {
+                        field.onChange(e.target.value, setValue);
+                      }
+                    }
+                  })}
                 />
               )}
 

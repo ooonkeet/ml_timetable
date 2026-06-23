@@ -30,7 +30,11 @@ export const createStream = async (req, res) => {
 
 export const getStreams = async (req, res) => {
   try {
-    const streams = await Stream.find().populate({
+    const filter = {};
+    if (req.query.programId) {
+      filter.program = req.query.programId;
+    }
+    const streams = await Stream.find(filter).populate({
       path: 'program',
       populate: {
         path: 'university'

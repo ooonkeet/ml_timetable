@@ -6,6 +6,12 @@ import toast from 'react-hot-toast';
 const Subjects = () => {
   const [subjects, setSubjects] = useState([]);
   const [streams, setStreams] = useState([]);
+  const [universities, setUniversities] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [selectedUniversity, setSelectedUniversity] = useState('');
+  const [selectedProgram, setSelectedProgram] = useState('');
+  const [modalSelectedUniversity, setModalSelectedUniversity] = useState('');
+  const [modalSelectedProgram, setModalSelectedProgram] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editSubject, setEditSubject] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -13,6 +19,8 @@ const Subjects = () => {
   const [selectedStream, setSelectedStream] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('');
+  const [selectedUploadUniversity, setSelectedUploadUniversity] = useState('');
+  const [selectedUploadProgram, setSelectedUploadProgram] = useState('');
   const [selectedUploadStream, setSelectedUploadStream] = useState('');
   const [selectedUploadYear, setSelectedUploadYear] = useState('');
   const [selectedUploadSemester, setSelectedUploadSemester] = useState('');
@@ -54,8 +62,34 @@ const Subjects = () => {
     }
   };
 
+  // fetch all programs for the dropdown
+  const fetchPrograms = async () => {
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/api/v1/programs/getProgram`
+      );
+      setPrograms(res.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  // fetch all universities for the dropdown
+  const fetchUniversities = async () => {
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/api/v1/university/getUni`
+      );
+      setUniversities(res.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   useEffect(() => {
     fetchStreams();
+    fetchPrograms();
+    fetchUniversities();
   }, []);
 
   useEffect(() => {
@@ -64,6 +98,14 @@ const Subjects = () => {
 
   const handleEdit = (subject) => {
     setEditSubject(subject);
+    const subjectStreamId = subject.stream?._id || subject.stream;
+    const streamDetails = streams.find(s => s._id === subjectStreamId);
+    const programId = streamDetails?.program?._id || streamDetails?.program;
+    const programDetails = programs.find(p => p._id === programId);
+    const uniId = programDetails?.university?._id || programDetails?.university;
+
+    setModalSelectedUniversity(uniId || '');
+    setModalSelectedProgram(programId || '');
     setShowModal(true);
   };
 
@@ -102,14 +144,16 @@ const Subjects = () => {
           ? parseInt(formData.credits)
           : parseInt(formData.credits) * 2;
 
-      const submitData = {
-        code: String(formData.code).trim(),
-        name: formData.name.trim(),
-        stream: formData.stream,
-        year: Number(formData.year),
-        semester: Number(formData.semester),
-        type: formData.type.toLowerCase(),
-        credits: Number(formData.credits),
+      const { university, program, ...submitData } = formData;
+
+      const formattedSubmitData = {
+        code: String(submitData.code).trim(),
+        name: submitData.name.trim(),
+        stream: submitData.stream,
+        year: Number(submitData.year),
+        semester: Number(submitData.semester),
+        type: submitData.type.toLowerCase(),
+        credits: Number(submitData.credits),
         totalClassesPerWeek,
       };
 
@@ -119,15 +163,16 @@ const Subjects = () => {
           `${import.meta.env.VITE_BASE_URL}/api/v1/subjects/subject/${
             editSubject._id
           }`,
-          submitData
+          formattedSubmitData
         );
         toast.success('Edited successfully!');
       } else {
         // create subject
         await axios.post(
           `${import.meta.env.VITE_BASE_URL}/api/v1/subjects/createSubject`,
-          submitData
+          formattedSubmitData
         );
+        toast.success('Subject created successfully!');
       }
       await fetchSubjects();
       setShowModal(false);
@@ -164,6 +209,20 @@ const Subjects = () => {
 
           if (res.data?.subjects && Array.isArray(res.data.subjects)) {
             setParsedSubjects(res.data.subjects);
+            if (selectedStream) {
+              const streamDetails = streams.find(s => s._id === selectedStream);
+              const programId = streamDetails?.program?._id || streamDetails?.program;
+              const programDetails = programs.find(p => p._id === programId);
+              const uniId = programDetails?.university?._id || programDetails?.university;
+
+              setSelectedUploadUniversity(uniId || '');
+              setSelectedUploadProgram(programId || '');
+              setSelectedUploadStream(selectedStream);
+            } else {
+              setSelectedUploadUniversity('');
+              setSelectedUploadProgram('');
+              setSelectedUploadStream('');
+            }
             setShowPreviewModal(true);
             toast.success("Syllabus parsed successfully!", { id: loadingToast });
           } else {
@@ -238,6 +297,8 @@ const Subjects = () => {
       toast.success(`Successfully added ${subjectsToSave.length} subjects!`, { id: saveToast });
       setShowPreviewModal(false);
       setParsedSubjects([]);
+      setSelectedUploadUniversity('');
+      setSelectedUploadProgram('');
       setSelectedUploadStream('');
       setSelectedUploadYear('');
       setSelectedUploadSemester('');
@@ -268,6 +329,17 @@ const Subjects = () => {
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-400 to-blue-600 text-white font-medium shadow hover:from-blue-600 hover:to-blue-700 transition"
               onClick={() => {
                 setEditSubject(null);
+                setModalSelectedUniversity('');
+                setModalSelectedProgram('');
+                if (selectedStream) {
+                  const streamDetails = streams.find(s => s._id === selectedStream);
+                  const programId = streamDetails?.program?._id || streamDetails?.program;
+                  const programDetails = programs.find(p => p._id === programId);
+                  const uniId = programDetails?.university?._id || programDetails?.university;
+
+                  setModalSelectedUniversity(uniId || '');
+                  setModalSelectedProgram(programId || '');
+                }
                 setShowModal(true);
               }}
             >
@@ -279,6 +351,76 @@ const Subjects = () => {
         {/* Filter Bar */}
         <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 mb-6 flex flex-wrap gap-6 items-center">
           <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">University</label>
+            <select
+              value={selectedUniversity}
+              onChange={e => {
+                setSelectedUniversity(e.target.value);
+                setSelectedProgram('');
+                setSelectedStream('');
+                setSelectedUploadStream('');
+              }}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[180px]"
+            >
+              <option value="">-- Select University --</option>
+              {universities.map(uni => (
+                <option key={uni._id} value={uni._id}>
+                  {uni.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Program</label>
+            <select
+              value={selectedProgram}
+              onChange={e => {
+                setSelectedProgram(e.target.value);
+                setSelectedStream('');
+                setSelectedUploadStream('');
+              }}
+              disabled={!selectedUniversity}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[180px] disabled:bg-slate-100 disabled:cursor-not-allowed"
+            >
+              <option value="">-- Select Program --</option>
+              {programs
+                .filter(p => {
+                  const uniId = p.university?._id || p.university;
+                  return uniId === selectedUniversity;
+                })
+                .map(prog => (
+                  <option key={prog._id} value={prog._id}>
+                    {prog.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stream</label>
+            <select
+              value={selectedStream}
+              onChange={e => {
+                setSelectedStream(e.target.value);
+                setSelectedUploadStream(e.target.value);
+              }}
+              disabled={!selectedProgram}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[200px] disabled:bg-slate-100 disabled:cursor-not-allowed"
+            >
+              <option value="">-- Select Stream --</option>
+              {streams
+                .filter(s => {
+                  const progId = s.program?._id || s.program;
+                  return progId === selectedProgram;
+                })
+                .map(str => (
+                  <option key={str._id} value={str._id}>{str.name}</option>
+                ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Year</label>
             <select
               value={selectedYear}
@@ -286,7 +428,8 @@ const Subjects = () => {
                 setSelectedYear(e.target.value);
                 setSelectedUploadYear(e.target.value);
               }}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[130px]"
+              disabled={!selectedStream}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[130px] disabled:bg-slate-100 disabled:cursor-not-allowed"
             >
               <option value="">-- Select Year --</option>
               {[1, 2, 3, 4].map(y => (
@@ -303,7 +446,8 @@ const Subjects = () => {
                 setSelectedSemester(e.target.value);
                 setSelectedUploadSemester(e.target.value);
               }}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[150px]"
+              disabled={!selectedYear}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[150px] disabled:bg-slate-100 disabled:cursor-not-allowed"
             >
               <option value="">-- Select Semester --</option>
               {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
@@ -311,28 +455,11 @@ const Subjects = () => {
               ))}
             </select>
           </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stream</label>
-            <select
-              value={selectedStream}
-              onChange={e => {
-                setSelectedStream(e.target.value);
-                setSelectedUploadStream(e.target.value);
-              }}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-blue-500 min-w-[220px]"
-            >
-              <option value="">-- Select Stream --</option>
-              {streams.map(str => (
-                <option key={str._id} value={str._id}>{str.name}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
-        {(!selectedYear || !selectedSemester || !selectedStream) ? (
+        {(!selectedUniversity || !selectedProgram || !selectedStream || !selectedYear || !selectedSemester) ? (
           <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-12 text-center text-slate-500">
-            <p className="text-base font-semibold">Please select Year, Semester, and Stream from the filters above to view and manage subjects.</p>
+            <p className="text-base font-semibold">Please select University, Program, Stream, Year, and Semester from the filters above to view and manage subjects.</p>
           </div>
         ) : (
           <Table
@@ -384,13 +511,51 @@ const Subjects = () => {
                 type: 'text',
               },
               {
+                name: 'university',
+                label: 'University',
+                type: 'select',
+                options: universities.map((uni) => ({
+                  value: uni._id,
+                  label: uni.name,
+                })),
+                onChange: (value, setValue) => {
+                  setModalSelectedUniversity(value);
+                  setModalSelectedProgram('');
+                  setValue('program', '');
+                  setValue('stream', '');
+                }
+              },
+              {
+                name: 'program',
+                label: 'Program',
+                type: 'select',
+                options: programs
+                  .filter((p) => {
+                    const uniId = p.university?._id || p.university;
+                    return uniId === modalSelectedUniversity;
+                  })
+                  .map((program) => ({
+                    value: program._id,
+                    label: program.name,
+                  })),
+                onChange: (value, setValue) => {
+                  setModalSelectedProgram(value);
+                  setValue('stream', '');
+                }
+              },
+              {
                 name: 'stream',
                 label: 'Stream',
                 type: 'select',
-                options: streams.map((stream) => ({
-                  value: stream._id,
-                  label: stream.name,
-                })),
+                options: streams
+                  .filter((s) => {
+                    const progId = s.program?._id || s.program;
+                    return progId === modalSelectedProgram;
+                  })
+                  .map((stream) => ({
+                    value: stream._id,
+                    label: stream.name,
+                  })),
               },
               {
                 name: 'year',
@@ -443,10 +608,34 @@ const Subjects = () => {
               editSubject
                 ? {
                     ...editSubject,
+                    university: (function() {
+                      const subjectStreamId = editSubject.stream?._id || editSubject.stream;
+                      const streamDetails = streams.find(s => s._id === subjectStreamId);
+                      const programId = streamDetails?.program?._id || streamDetails?.program;
+                      const programDetails = programs.find(p => p._id === programId);
+                      return programDetails?.university?._id || programDetails?.university || '';
+                    })(),
+                    program: (function() {
+                      const subjectStreamId = editSubject.stream?._id || editSubject.stream;
+                      const streamDetails = streams.find(s => s._id === subjectStreamId);
+                      return streamDetails?.program?._id || streamDetails?.program || '';
+                    })(),
                     stream: editSubject.stream?._id || editSubject.stream,
                     totalClassesPerWeek: editSubject.totalClassesPerWeek || 0,
                   }
                 : {
+                    university: (function() {
+                      if (!selectedStream) return '';
+                      const streamDetails = streams.find(s => s._id === selectedStream);
+                      const programId = streamDetails?.program?._id || streamDetails?.program;
+                      const programDetails = programs.find(p => p._id === programId);
+                      return programDetails?.university?._id || programDetails?.university || '';
+                    })(),
+                    program: (function() {
+                      if (!selectedStream) return '';
+                      const streamDetails = streams.find(s => s._id === selectedStream);
+                      return streamDetails?.program?._id || streamDetails?.program || '';
+                    })(),
                     stream: selectedStream || '',
                     year: selectedYear ? Number(selectedYear) : '',
                     semester: selectedSemester ? Number(selectedSemester) : '',
@@ -466,7 +655,13 @@ const Subjects = () => {
                   <p className="text-xs text-slate-500 mt-0.5">Gemini has extracted {parsedSubjects.length} subjects from your syllabus. Please review them below.</p>
                 </div>
                 <button 
-                  onClick={() => { setShowPreviewModal(false); setParsedSubjects([]); }}
+                  onClick={() => { 
+                    setShowPreviewModal(false); 
+                    setParsedSubjects([]); 
+                    setSelectedUploadUniversity('');
+                    setSelectedUploadProgram('');
+                    setSelectedUploadStream('');
+                  }}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition"
                 >
                   ✕
@@ -481,14 +676,55 @@ const Subjects = () => {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <select
+                      value={selectedUploadUniversity}
+                      onChange={e => {
+                        setSelectedUploadUniversity(e.target.value);
+                        setSelectedUploadProgram('');
+                        setSelectedUploadStream('');
+                      }}
+                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[180px]"
+                    >
+                      <option value="">-- University --</option>
+                      {universities.map(uni => (
+                        <option key={uni._id} value={uni._id}>{uni.name}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedUploadProgram}
+                      onChange={e => {
+                        setSelectedUploadProgram(e.target.value);
+                        setSelectedUploadStream('');
+                      }}
+                      disabled={!selectedUploadUniversity}
+                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[180px] disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">-- Program --</option>
+                      {programs
+                        .filter(p => {
+                          const uniId = p.university?._id || p.university;
+                          return uniId === selectedUploadUniversity;
+                        })
+                        .map(prog => (
+                          <option key={prog._id} value={prog._id}>{prog.name}</option>
+                        ))}
+                    </select>
+
+                    <select
                       value={selectedUploadStream}
                       onChange={e => setSelectedUploadStream(e.target.value)}
-                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[200px]"
+                      disabled={!selectedUploadProgram}
+                      className="px-4 py-2.5 bg-white border-2 border-indigo-200 rounded-lg text-sm text-slate-800 font-semibold focus:border-indigo-500 outline-none min-w-[180px] disabled:bg-slate-100 disabled:cursor-not-allowed"
                     >
-                      <option value="">-- Select Stream --</option>
-                      {streams.map(str => (
-                        <option key={str._id} value={str._id}>{str.name} ({str.program?.name || 'N/A'})</option>
-                      ))}
+                      <option value="">-- Stream --</option>
+                      {streams
+                        .filter(s => {
+                          const progId = s.program?._id || s.program;
+                          return progId === selectedUploadProgram;
+                        })
+                        .map(str => (
+                          <option key={str._id} value={str._id}>{str.name}</option>
+                        ))}
                     </select>
 
                     <select
@@ -607,7 +843,13 @@ const Subjects = () => {
 
               <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
                 <button
-                  onClick={() => { setShowPreviewModal(false); setParsedSubjects([]); }}
+                  onClick={() => { 
+                    setShowPreviewModal(false); 
+                    setParsedSubjects([]); 
+                    setSelectedUploadUniversity('');
+                    setSelectedUploadProgram('');
+                    setSelectedUploadStream('');
+                  }}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg"
                 >
                   Cancel

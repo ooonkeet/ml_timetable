@@ -26,7 +26,11 @@ export const createProgram = async (req, res) => {
 //GET
 export const getPrograms = async (req, res) => {
   try {
-    const programs = await Program.find().populate('university');
+    const filter = {};
+    if (req.query.universityId) {
+      filter.university = req.query.universityId;
+    }
+    const programs = await Program.find(filter).populate('university');
     res.status(200).json(programs);
   } catch (error) {
     res.status(500).json({ message: error.message });

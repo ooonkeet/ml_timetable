@@ -131,7 +131,7 @@ export default function TimetableView({ schedule }) {
           return (
             <div key={sectionName}>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                <div className="px-3 h-8 min-w-[32px] w-fit bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                   {sectionName}
                 </div>
                 <h3 className="text-lg font-bold text-slate-800">Section {sectionName} Timetable</h3>
@@ -221,13 +221,13 @@ export default function TimetableView({ schedule }) {
                 {/* Subjects */}
                 <div className="bg-white border border-slate-100 rounded-xl p-4">
                   <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Subjects</h5>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-2">
                     {(schedule.subjects || []).map((subj, i) => {
-                      const c = SUBJECT_COLORS[i % SUBJECT_COLORS.length];
+                      const c = subjectColorMap[subj.name]?.theory || SUBJECT_COLORS[i % SUBJECT_COLORS.length];
                       return (
-                        <div key={subj.code} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${c.bg} border ${c.border}`}>
-                          <span className={`text-xs font-bold font-mono ${c.text} w-12 flex-shrink-0`}>{subj.code}</span>
-                          <span className={`text-xs ${c.text} truncate`}>{subj.name}</span>
+                        <div key={subj.code} className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                          <span className={`text-[10px] font-bold font-mono ${c.text} min-w-[75px] flex-shrink-0 bg-white px-2 py-0.5 rounded border ${c.border} text-center`}>{subj.code}</span>
+                          <span className="text-xs text-slate-700 font-medium truncate flex-1">{subj.name}</span>
                         </div>
                       );
                     })}

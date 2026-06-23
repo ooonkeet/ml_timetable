@@ -505,14 +505,8 @@ const TimeTablePage = () => {
   useEffect(() => {
     if (!selectedProgram) { setStreams([]); setSelectedStream(null); return; }
     setLoading(true);
-    axios.get(`${BASE}/api/v1/streams/getstreams`)
-      .then(r => {
-        const filtered = (r.data || []).filter(s => {
-          const progId = s.program?._id || s.program;
-          return progId === selectedProgram._id;
-        });
-        setStreams(filtered);
-      })
+    axios.get(`${BASE}/api/v1/streams/getstreams?programId=${selectedProgram._id}`)
+      .then(r => setStreams(r.data || []))
       .catch(() => setStreams([]))
       .finally(() => setLoading(false));
   }, [selectedProgram]);
@@ -565,14 +559,21 @@ const TimeTablePage = () => {
         setError('No subjects found for this stream, year, and semester. Add subjects first.');
         return;
       }
-      const mappedSubjects = subjectsData.map(s => ({
-        name: s.name,
-        code: s.code != null ? String(s.code) : s.name.substring(0, 5).toUpperCase(),
-        type: s.type,
-        totalClassesPerWeek: s.totalClassesPerWeek || 0,
-        credit: s.type === "theory" ? (s.totalClassesPerWeek || 0) : 0,
-        lab: s.type === "lab" ? Math.max(1, Math.floor((s.totalClassesPerWeek || 0) / 2)) : 0,
-      }));
+      const mappedSubjects = subjectsData
+        .map(s => ({
+          name: s.name,
+          code: s.code != null ? String(s.code) : s.name.substring(0, 5).toUpperCase(),
+          type: s.type,
+          totalClassesPerWeek: s.totalClassesPerWeek || 0,
+          credit: s.type === "theory" ? (s.totalClassesPerWeek || 0) : 0,
+          lab: s.type === "lab" ? Math.max(1, Math.floor((s.totalClassesPerWeek || 0) / 2)) : 0,
+        }))
+        .filter(s => s.totalClassesPerWeek > 0);
+
+      if (mappedSubjects.length === 0) {
+        setError('No active subjects (with classes per week > 0) found for this stream, year, and semester. Please add active subjects or set classes/credits first.');
+        return;
+      }
       setSubjects(mappedSubjects);
       setStep(2);
     } catch (err) {
@@ -815,7 +816,10 @@ const TimeTablePage = () => {
                   setSelectedYear('');
                   setSelectedSemester('');
                 }}
-                options={programs}
+                options={programs.filter(p => {
+                  const uniId = p.university?._id || p.university;
+                  return !selectedUniversity || uniId === selectedUniversity._id;
+                })}
                 disabled={!selectedUniversity}
                 placeholder="-- Select Program --"
               />
@@ -827,7 +831,10 @@ const TimeTablePage = () => {
                   setSelectedYear('');
                   setSelectedSemester('');
                 }}
-                options={streams}
+                options={streams.filter(s => {
+                  const progId = s.program?._id || s.program;
+                  return !selectedProgram || progId === selectedProgram._id;
+                })}
                 disabled={!selectedProgram}
                 placeholder="-- Select Stream --"
               />

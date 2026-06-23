@@ -6,12 +6,15 @@ import toast from 'react-hot-toast';
 const Sections = () => {
   const [sections, setSections] = useState([]);
   const [streams, setStreams] = useState([]);
+  const [programs, setPrograms] = useState([]);
   const [universities, setUniversities] = useState([]);
   const [selectedUniversity, setSelectedUniversity] = useState('');
   const [selectedStream, setSelectedStream] = useState('');
   const [selectedYearSem, setSelectedYearSem] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editSection, setEditSection] = useState(null);
+  const [modalSelectedUniversity, setModalSelectedUniversity] = useState('');
+  const [modalSelectedProgram, setModalSelectedProgram] = useState('');
 
   // fetch all sections
   const fetchSections = async () => {
@@ -37,6 +40,18 @@ const Sections = () => {
     }
   };
 
+  // fetch all programs for the dropdown
+  const fetchPrograms = async () => {
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/api/v1/programs/getProgram`
+      );
+      setPrograms(res.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   // fetch all universities for the dropdown filter
   const fetchUniversities = async () => {
     try {
@@ -52,11 +67,20 @@ const Sections = () => {
   useEffect(() => {
     fetchSections();
     fetchStreams();
+    fetchPrograms();
     fetchUniversities();
   }, []);
 
   const handleEdit = (section) => {
     setEditSection(section);
+    const sectionStreamId = section.stream?._id || section.stream;
+    const streamDetails = streams.find(s => s._id === sectionStreamId);
+    const programId = streamDetails?.program?._id || streamDetails?.program;
+    const programDetails = programs.find(p => p._id === programId);
+    const uniId = programDetails?.university?._id || programDetails?.university;
+
+    setModalSelectedUniversity(uniId || '');
+    setModalSelectedProgram(programId || '');
     setShowModal(true);
   };
 
@@ -98,25 +122,28 @@ const Sections = () => {
 
   const handleSubmit = async (formData) => {
     try {
+      const { university, program, ...submitData } = formData;
+
       if (editSection) {
         // update section
         await axios.put(
           `${import.meta.env.VITE_BASE_URL}/api/v1/sections/${editSection._id}`,
-          formData
+          submitData
         );
         toast.success('Edited successfully!');
       } else {
         // create section
         await axios.post(
           `${import.meta.env.VITE_BASE_URL}/api/v1/sections/createSection`,
-          formData
+          submitData
         );
+        toast.success('Section created successfully!');
       }
       fetchSections();
       setShowModal(false);
     } catch (error) {
       console.error('Failed to save section:', error);
-      throw error;
+      toast.error(error.response?.data?.message || 'Failed to save section');
     }
   };
 
@@ -155,6 +182,10 @@ const Sections = () => {
             className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-400 to-blue-600 text-white font-medium shadow hover:from-blue-600 hover:to-blue-700 transition"
             onClick={() => {
               setEditSection(null);
+              setModalSelectedUniversity(selectedUniversity || '');
+              const streamDetails = streams.find(s => s._id === selectedStream);
+              const programId = streamDetails?.program?._id || streamDetails?.program;
+              setModalSelectedProgram(programId || '');
               setShowModal(true);
             }}
           >
@@ -257,13 +288,51 @@ const Sections = () => {
             fields={[
               { name: 'name', label: 'Section Name', type: 'text' },
               {
+                name: 'university',
+                label: 'University',
+                type: 'select',
+                options: universities.map((uni) => ({
+                  value: uni._id,
+                  label: uni.name,
+                })),
+                onChange: (value, setValue) => {
+                  setModalSelectedUniversity(value);
+                  setModalSelectedProgram('');
+                  setValue('program', '');
+                  setValue('stream', '');
+                }
+              },
+              {
+                name: 'program',
+                label: 'Program',
+                type: 'select',
+                options: programs
+                  .filter((p) => {
+                    const uniId = p.university?._id || p.university;
+                    return uniId === modalSelectedUniversity;
+                  })
+                  .map((program) => ({
+                    value: program._id,
+                    label: program.name,
+                  })),
+                onChange: (value, setValue) => {
+                  setModalSelectedProgram(value);
+                  setValue('stream', '');
+                }
+              },
+              {
                 name: 'stream',
                 label: 'Stream',
                 type: 'select',
-                options: streams.map(stream => ({
-                  value: stream._id,
-                  label: stream.name
-                }))
+                options: streams
+                  .filter((s) => {
+                    const progId = s.program?._id || s.program;
+                    return progId === modalSelectedProgram;
+                  })
+                  .map((stream) => ({
+                    value: stream._id,
+                    label: stream.name,
+                  })),
               },
               {
                 name: 'year',
@@ -296,9 +365,26 @@ const Sections = () => {
               editSection
                 ? {
                     ...editSection,
+                    university: (function() {
+                      const sectionStreamId = editSection.stream?._id || editSection.stream;
+                      const streamDetails = streams.find(s => s._id === sectionStreamId);
+                      const programId = streamDetails?.program?._id || streamDetails?.program;
+                      const programDetails = programs.find(p => p._id === programId);
+                      return programDetails?.university?._id || programDetails?.university || '';
+                    })(),
+                    program: (function() {
+                      const sectionStreamId = editSection.stream?._id || editSection.stream;
+                      const streamDetails = streams.find(s => s._id === sectionStreamId);
+                      return streamDetails?.program?._id || streamDetails?.program || '';
+                    })(),
                     stream: editSection.stream?._id || editSection.stream
                   }
                 : {
+                    university: selectedUniversity || '',
+                    program: (function() {
+                      const streamDetails = streams.find(s => s._id === selectedStream);
+                      return streamDetails?.program?._id || streamDetails?.program || '';
+                    })(),
                     stream: selectedStream || '',
                     year: selectedYearSem ? Number(selectedYearSem.split('-')[0]) : '',
                     semester: selectedYearSem ? Number(selectedYearSem.split('-')[1]) : '',
