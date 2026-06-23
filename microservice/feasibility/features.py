@@ -21,7 +21,7 @@ def extract_features(payload: dict) -> list:
 
     # ratios are the most predictive features — how tight is each resource?
     theory_room_ratio = theory_demand / max(theory_rooms * capacity_per_room, 1)
-    lab_room_ratio = lab_demand / max(lab_rooms * capacity_per_room, 1)
+    lab_room_ratio = (lab_demand * 2) / max(lab_rooms * capacity_per_room, 1)
     faculty_ratio = faculty_hours_needed / max(faculty_count * capacity_per_room, 1)
 
     return [

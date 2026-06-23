@@ -30,7 +30,15 @@ export const createSection = async (req, res) => {
 
 export const getSections = async (req, res) => {
   try {
-    const sections = await Section.find().populate('stream');
+    const sections = await Section.find().populate({
+      path: 'stream',
+      populate: {
+        path: 'program',
+        populate: {
+          path: 'university'
+        }
+      }
+    });
     res.json(sections);
   } catch (error) {
     res.status(500).json({ message: error.message });

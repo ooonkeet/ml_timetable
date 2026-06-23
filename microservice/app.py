@@ -107,6 +107,17 @@ def schedule(payload: Payload):
                 if not is_lab_covered:
                     raise HTTPException(status_code=400, detail=f"Lab for subject '{s.name}' has no faculty assigned for Section '{sec}'.")
 
+            # Check lab room coverage if needed
+            if s.lab > 0:
+                assigned_room = next(
+                    (assign.roomName for assign in payload.labRoomAssignments if assign.subjectName == s.name and assign.sectionName == sec),
+                    None
+                )
+                if not assigned_room:
+                    raise HTTPException(status_code=400, detail=f"Lab for subject '{s.name}' has no lab room assigned for Section '{sec}'.")
+                if assigned_room not in payload.labRooms:
+                    raise HTTPException(status_code=400, detail=f"Lab room '{assigned_room}' assigned to '{s.name}' (Section '{sec}') is not in the labRooms list.")
+
     # Validation: ensure all faculty names are unique (case-insensitive)
     seen_faculty_names = set()
     for f in payload.faculty:
@@ -121,8 +132,12 @@ def schedule(payload: Payload):
             raise HTTPException(status_code=400, detail=f"Subject '{s.name}' must have at least one theory or lab class.")
     if len(payload.theoryRooms) < 1:
         raise HTTPException(status_code=400, detail="need at least one theory room")
+    if len(payload.theoryRooms) != len(set(payload.theoryRooms)):
+        raise HTTPException(status_code=400, detail="Theory room names must be unique.")
     if len(payload.labRooms) < 1:
         raise HTTPException(status_code=400, detail="need at least one lab room")
+    if len(payload.labRooms) != len(set(payload.labRooms)):
+        raise HTTPException(status_code=400, detail="Lab room names must be unique.")
 
     # indexing helpers
     S = sections_count
@@ -269,6 +284,26 @@ def schedule(payload: Payload):
                 for p in range(P - 1)
                 if p != brk and (p + 1) != brk
             ) == needed_labs)
+
+    # For each section and subject theory: max 1 theory class of this subject per day
+    for si in range(S):
+        for subi in range(len(subj_list)):
+            for d in range(D):
+                model.Add(sum(
+                    x[(si, subi, d, p)]
+                    for p in range(P)
+                    if p != brk
+                ) <= 1)
+
+    # For each section and subject lab: max 1 lab block of this subject per day
+    for si in range(S):
+        for subi in range(len(subj_list)):
+            for d in range(D):
+                model.Add(sum(
+                    lstart[(si, subi, d, p)]
+                    for p in range(P - 1)
+                    if p != brk and (p + 1) != brk
+                ) <= 1)
 
     # ---------- Section occupancy constraints ----------
     # For each section, day, period: sum of theory classes + labs occupying that period <= 1

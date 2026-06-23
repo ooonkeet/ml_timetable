@@ -294,6 +294,9 @@ const FacultyCard = ({ faculty, index, subjects, sectionNames,facultyList, onCha
                     <td className="p-1 text-center">
                       {subj.type === 'lab' ? (
                         <button
+                          disabled={
+                            isTakenByAnotherFaculty(subj.name, sec, 'lab')
+                          }
                           onClick={() => toggleAssignment(subj.name, sec, 'lab')}
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center mx-auto transition ${isAssigned(subj.name, sec, 'lab')
                             ? 'bg-purple-600 border-purple-600 text-white'
@@ -310,6 +313,120 @@ const FacultyCard = ({ faculty, index, subjects, sectionNames,facultyList, onCha
                 ))}
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ─── Lab Room Assignment Card ───────────────────────────────────────────────────
+const LabRoomCard = ({ roomAssignment, index, subjects, sectionNames, labRoomAssignmentsList, onChange }) => {
+  const updateField = (field, val) => onChange(index, { ...roomAssignment, [field]: val });
+
+  const toggleAssignment = (subjectName, sectionName) => {
+    const existing = roomAssignment.assignments.find(
+      a => a.subjectName === subjectName
+    );
+    let newAssignments = [...roomAssignment.assignments];
+
+    if (existing) {
+      newAssignments = newAssignments.map(a => {
+        if (a.subjectName === subjectName) {
+          const alreadyHasSec = a.sections.includes(sectionName);
+          return {
+            ...a,
+            sections: alreadyHasSec
+              ? a.sections.filter(s => s !== sectionName)
+              : [...a.sections, sectionName]
+          };
+        }
+        return a;
+      }).filter(a => a.sections.length > 0);
+    } else {
+      newAssignments.push({
+        subjectName,
+        sections: [sectionName],
+      });
+    }
+    updateField('assignments', newAssignments);
+  };
+
+  const isAssigned = (subjectName, sectionName) => {
+    const a = roomAssignment.assignments.find(
+      a => a.subjectName === subjectName && a.sections.includes(sectionName)
+    );
+    return !!a;
+  };
+
+  const isTakenByAnotherRoom = (subjectName, sectionName) => {
+    return labRoomAssignmentsList.some((lr, lrIdx) => {
+      if (lrIdx === index) return false; // ignore current room
+      return lr.assignments.some(a =>
+        a.subjectName === subjectName && a.sections.includes(sectionName)
+      );
+    });
+  };
+
+  const labSubjects = subjects.filter(s => s.type === 'lab');
+
+  return (
+    <div className="border-2 border-slate-200 rounded-xl p-5 bg-white hover:border-purple-200 transition group">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+          {roomAssignment.roomName.slice(0, 3).toUpperCase()}
+        </div>
+        <div>
+          <h4 className="font-bold text-slate-800 text-lg">{roomAssignment.roomName}</h4>
+          <p className="text-xs text-slate-400 font-medium">Assign subjects and sections to this lab room</p>
+        </div>
+      </div>
+
+      {/* Assignment Grid */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="text-left p-2 font-semibold text-slate-600 rounded-tl-lg">Lab Subject</th>
+              {sectionNames.map(sec => (
+                <th key={sec} className="text-center p-2 font-semibold text-slate-600">
+                  Sec {sec}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {labSubjects.map(subj => (
+              <tr key={subj.name} className="border-t border-slate-100 hover:bg-slate-50/50">
+                <td className="p-2 font-medium text-slate-700">{subj.name}
+                  <span className="ml-1 text-slate-400 font-mono">({subj.code})</span>
+                </td>
+                {sectionNames.map(sec => (
+                  <td key={sec} className="p-1 text-center">
+                    <button
+                      disabled={isTakenByAnotherRoom(subj.name, sec)}
+                      onClick={() => toggleAssignment(subj.name, sec)}
+                      className={`w-6 h-6 rounded border-2 flex items-center justify-center mx-auto transition ${
+                        isAssigned(subj.name, sec)
+                          ? 'bg-purple-600 border-purple-600 text-white'
+                          : isTakenByAnotherRoom(subj.name, sec)
+                          ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-50'
+                          : 'border-slate-300 hover:border-purple-400'
+                      }`}
+                    >
+                      {isAssigned(subj.name, sec) && <Icon.Check />}
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {labSubjects.length === 0 && (
+              <tr>
+                <td colSpan={sectionNames.length + 1} className="text-center py-4 text-slate-400 italic">
+                  No lab subjects found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -344,6 +461,10 @@ const TimeTablePage = () => {
 
   // Faculty
   const [facultyList, setFacultyList] = useState([]);
+
+  // Lab Room Assignments
+  const [labRoomAssignmentsState, setLabRoomAssignmentsState] = useState([]);
+  const [assignmentTab, setAssignmentTab] = useState('faculty'); // 'faculty' | 'labRooms'
 
   // Result
   const [generationData, setGenerationData] = useState(null);
@@ -471,6 +592,15 @@ const TimeTablePage = () => {
     if (facultyList.length === 0) {
       setFacultyList([{ name: '', abbr: '', assignments: [] }]);
     }
+
+    // Initialize/sync labRoomAssignmentsState with labRooms
+    setLabRoomAssignmentsState(prev => {
+      return labRooms.map(roomName => {
+        const existing = prev.find(item => item.roomName === roomName);
+        return existing || { roomName, assignments: [] };
+      });
+    });
+
     setStep(3);
   };
 
@@ -498,6 +628,19 @@ const TimeTablePage = () => {
         }
       }
     }
+
+    // Check lab room coverage for every lab subject × section
+    for (const subj of subjects) {
+      if (subj.type === 'lab') {
+        for (const sec of sectionNames) {
+          const covered = labRoomAssignmentsState.some(lr =>
+            lr.assignments.some(a => a.subjectName === subj.name && a.sections.includes(sec))
+          );
+          if (!covered) { setError(`No lab room assigned for lab of "${subj.name}" in Section ${sec}`); return; }
+        }
+      }
+    }
+
     setError('');
     setStep(4);
   };
@@ -505,23 +648,28 @@ const TimeTablePage = () => {
   // ── Shared payload builder (used by both feasibility check and real generate) ─
   const buildPayload = () => {
     const theoryRoomAssignments = [];
-    const labRoomAssignments = [];
     subjects.forEach((subj, idx) => {
-      sectionNames.forEach(sec => {
+      sectionNames.forEach((sec, secIdx) => {
         if (subj.type === 'theory') {
           theoryRoomAssignments.push({
             subjectName: subj.name,
             sectionName: sec,
-            roomName: theoryRooms[idx % theoryRooms.length],
+            roomName: theoryRooms[secIdx % theoryRooms.length],
           });
         }
-        if (subj.type === 'lab') {
+      });
+    });
+
+    const labRoomAssignments = [];
+    labRoomAssignmentsState.forEach(lr => {
+      lr.assignments.forEach(assign => {
+        assign.sections.forEach(sec => {
           labRoomAssignments.push({
-            subjectName: subj.name,
+            subjectName: assign.subjectName,
             sectionName: sec,
-            roomName: labRooms[idx % labRooms.length],
+            roomName: lr.roomName,
           });
-        }
+        });
       });
     });
 
@@ -862,53 +1010,111 @@ const TimeTablePage = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Faculty Assignments</h2>
-                  <p className="text-slate-500 text-sm mt-1">Assign faculty to subjects and sections. Faculty may teach multiple subjects if the schedule permits.</p>
-                </div>
-                <button onClick={addFaculty} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition whitespace-nowrap">
-                  <Icon.Plus /> Add Faculty
+              {/* Tab Selector */}
+              <div className="flex border-b border-slate-200 mb-6">
+                <button
+                  onClick={() => setAssignmentTab('faculty')}
+                  className={`py-3 px-6 font-semibold text-sm border-b-2 transition ${
+                    assignmentTab === 'faculty'
+                      ? 'border-indigo-600 text-indigo-600 font-bold'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Faculty Assignments
+                </button>
+                <button
+                  onClick={() => setAssignmentTab('labRooms')}
+                  className={`py-3 px-6 font-semibold text-sm border-b-2 transition ${
+                    assignmentTab === 'labRooms'
+                      ? 'border-indigo-600 text-indigo-600 font-bold'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Lab Room Assignments
                 </button>
               </div>
 
-              {/* Coverage legend */}
-              <div className="flex gap-4 text-xs text-slate-500 mb-6 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded border-2 bg-indigo-600 border-indigo-600 inline-block"></span> Theory class assigned
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded border-2 bg-purple-600 border-purple-600 inline-block"></span> Lab class assigned
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded border-2 border-slate-300 inline-block"></span> Not assigned
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="text-slate-300">—</span> Not applicable
-                </span>
-              </div>
-
-              <div className="space-y-4">
-                {facultyList.map((f, idx) => (
-                  <FacultyCard
-                    key={idx}
-                    faculty={f}
-                    index={idx}
-                    subjects={subjects}
-                    sectionNames={sectionNames}
-                    facultyList={facultyList}
-                    onChange={updateFaculty}
-                    onRemove={removeFaculty}
-                  />
-                ))}
-                {facultyList.length === 0 && (
-                  <div className="text-center py-12 text-slate-400">
-                    <p className="text-4xl mb-3">👤</p>
-                    <p className="font-medium">No faculty added yet</p>
-                    <p className="text-sm mt-1">Click "Add Faculty" to get started</p>
+              {assignmentTab === 'faculty' ? (
+                <>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-900">Faculty Assignments</h2>
+                      <p className="text-slate-500 text-sm mt-1">Assign faculty to subjects and sections. Faculty may teach multiple subjects if the schedule permits.</p>
+                    </div>
+                    <button onClick={addFaculty} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition whitespace-nowrap">
+                      <Icon.Plus /> Add Faculty
+                    </button>
                   </div>
-                )}
-              </div>
+
+                  {/* Coverage legend */}
+                  <div className="flex gap-4 text-xs text-slate-500 mb-6 flex-wrap">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded border-2 bg-indigo-600 border-indigo-600 inline-block"></span> Theory class assigned
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded border-2 bg-purple-600 border-purple-600 inline-block"></span> Lab class assigned
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded border-2 border-slate-300 inline-block"></span> Not assigned
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-slate-300">—</span> Not applicable
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {facultyList.map((f, idx) => (
+                      <FacultyCard
+                        key={idx}
+                        faculty={f}
+                        index={idx}
+                        subjects={subjects}
+                        sectionNames={sectionNames}
+                        facultyList={facultyList}
+                        onChange={updateFaculty}
+                        onRemove={removeFaculty}
+                      />
+                    ))}
+                    {facultyList.length === 0 && (
+                      <div className="text-center py-12 text-slate-400">
+                        <p className="text-4xl mb-3">👤</p>
+                        <p className="font-medium">No faculty added yet</p>
+                        <p className="text-sm mt-1">Click "Add Faculty" to get started</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-slate-900">Lab Room Assignments</h2>
+                    <p className="text-slate-500 text-sm mt-1">Map each lab room to the subjects and sections that will use it.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {labRoomAssignmentsState.map((lr, idx) => (
+                      <LabRoomCard
+                        key={idx}
+                        roomAssignment={lr}
+                        index={idx}
+                        subjects={subjects}
+                        sectionNames={sectionNames}
+                        labRoomAssignmentsList={labRoomAssignmentsState}
+                        onChange={(i, updated) => {
+                          setLabRoomAssignmentsState(prev => prev.map((item, index) => index === i ? updated : item));
+                        }}
+                      />
+                    ))}
+                    {labRoomAssignmentsState.length === 0 && (
+                      <div className="text-center py-12 text-slate-400">
+                        <p className="text-4xl mb-3">🔬</p>
+                        <p className="font-medium">No lab rooms defined</p>
+                        <p className="text-sm mt-1">Go back to Step 2 to add lab rooms.</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-3 mt-8">
                 <button onClick={() => setStep(2)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
